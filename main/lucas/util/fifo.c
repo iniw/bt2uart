@@ -24,7 +24,7 @@ void lucas_fifo_free(lucas_fifo_t* this) {
     memset(this, 0, sizeof(lucas_fifo_t));
 }
 
-void lucas_fifo_push(lucas_fifo_t* this, uint8_t* data, size_t len) {
+void lucas_fifo_push(lucas_fifo_t* this, void* data, size_t len) {
     const size_t available_space = this->cap - this->len;
     if (len > available_space) {
         const size_t missing_space = len - available_space;

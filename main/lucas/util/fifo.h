@@ -16,6 +16,6 @@ void lucas_fifo_free(lucas_fifo_t*);
 
 void lucas_fifo_clear(lucas_fifo_t*);
 
-void lucas_fifo_push(lucas_fifo_t*, uint8_t* data, size_t len);
+void lucas_fifo_push(lucas_fifo_t*, void* data, size_t len);
 
 void lucas_fifo_pop(lucas_fifo_t*, size_t num);

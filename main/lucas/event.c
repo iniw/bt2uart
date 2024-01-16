@@ -3,7 +3,7 @@
 #include <driver/uart.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
-#include <lucas/uart.h>
+#include <lucas/water.h>
 #include <lucas/shared.h>
 #include <lucas/util/log.h>
 #include <lucas/util/err.h>
@@ -32,26 +32,25 @@ static void event_loop(void* octx) {
         xQueueReceive(s_event_queue, &event, portMAX_DELAY);
 
         switch (event.type) {
-        case LUCAS_EVENT_UART_RECV:
-            assert(event.recv.data && event.recv.len);
+        case LUCAS_EVENT_SPP_SEND:
+            assert(event.send.data && event.send.len);
 
-            LOGI("received uart data \"%.*s\" [%zu bytes - %zu total]", (int)event.recv.len, event.recv.data, event.recv.len, ctx->spp_fifo_buffer.len);
+            LOGI("sending spp data [%zu bytes - %zu total]", event.send.len, ctx->spp_fifo_buffer.len);
 
             // if there's no data currently buffered begin writing straight away
             // NOTE: this has to be evaluated before `lucas_fifo_push` so that the len is not affected by the push.
-            bool write_straight_away = ctx->spp_fifo_buffer.len == 0 && !spp_congested;
-            lucas_fifo_push(&ctx->spp_fifo_buffer, event.recv.data, event.recv.len);
-            if (write_straight_away)
+            bool send_straight_away = ctx->spp_fifo_buffer.len == 0 && !spp_congested;
+            lucas_fifo_push(&ctx->spp_fifo_buffer, event.send.data, event.send.len);
+            if (send_straight_away)
                 write_fifo_to_spp(&ctx->spp_fifo_buffer, g_shared_ctx.spp_handle);
 
-            free(event.recv.data);
+            free(event.send.data);
             break;
         case LUCAS_EVENT_SPP_RECV:
-            assert(event.recv.data && event.recv.len && event.recv.len <= LUCAS_UART_BUFFER_SIZE);
-
-            LOGI("received spp data [%zu bytes]", event.recv.len);
-            uart_write_bytes(LUCAS_UART_PORT, event.recv.data, event.recv.len);
-
+            assert(event.recv.data && event.recv.len);
+            ESP_LOG_BUFFER_HEX("cmd", event.recv.data, event.recv.len);
+            // maybe need to buffer this for newlines
+            lucas_water_interpret_cmd(event.recv.data);
             free(event.recv.data);
             break;
         case LUCAS_EVENT_SPP_WRITE_SUCCEEDED:
@@ -101,10 +100,10 @@ esp_err_t lucas_event_loop_init() {
     //       this object has to live as long as the task itself, which is forever
     static struct event_loop_ctx_t ctx = { 0 };
 
-    if (!lucas_fifo_init(&ctx.spp_fifo_buffer, LUCAS_UART_BUFFER_SIZE))
+    if (!lucas_fifo_init(&ctx.spp_fifo_buffer, 128))
         return ESP_ERR_NO_MEM;
 
-    s_event_queue = xQueueCreate(20, sizeof(lucas_event_t));
+    s_event_queue = xQueueCreate(120, sizeof(lucas_event_t));
     if (s_event_queue == NULL)
         return ESP_ERR_NO_MEM;
 

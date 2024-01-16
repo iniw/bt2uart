@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <esp_err.h>
+#include <lucas/water.h>
 
 #define LUCAS_EVENT_SEND(t)                  \
     do {                                     \
@@ -12,8 +13,8 @@
     } while (0)
 
 enum lucas_event_type_t {
-    // data received through uart
-    LUCAS_EVENT_UART_RECV,
+    // data received through bluetooth spp
+    LUCAS_EVENT_SPP_SEND,
 
     // data received through bluetooth spp
     LUCAS_EVENT_SPP_RECV,
@@ -34,10 +35,10 @@ typedef struct {
     enum lucas_event_type_t type;
 
     union {
-        struct {
+        struct lucas_event_data_t {
             uint8_t* data;
             size_t len;
-        } recv; // shared for both spp and uart receives
+        } recv, send;
 
         struct {
             size_t num_bytes_written;
@@ -47,5 +48,7 @@ typedef struct {
 } lucas_event_t;
 
 void lucas_event_send(lucas_event_t*);
+
+void lucas_event_send_from_isr(lucas_event_t*);
 
 esp_err_t lucas_event_loop_init();
