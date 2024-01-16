@@ -32,7 +32,7 @@ static void event_loop(void* octx) {
         xQueueReceive(s_event_queue, &event, portMAX_DELAY);
 
         switch (event.type) {
-        case LUCAS_EVENT_SPP_SEND:
+        case LUCAS_EVENT_SPP_SEND: {
             assert(event.send.data && event.send.len);
 
             LOGI("sending spp data [%zu bytes - %zu total]", event.send.len, ctx->spp_fifo_buffer.len);
@@ -45,7 +45,16 @@ static void event_loop(void* octx) {
                 write_fifo_to_spp(&ctx->spp_fifo_buffer, g_shared_ctx.spp_handle);
 
             free(event.send.data);
-            break;
+        } break;
+        case LUCAS_EVENT_WATER: {
+            LOGI("water event [%hu]", event.water.type);
+
+            bool send_straight_away = ctx->spp_fifo_buffer.len == 0 && !spp_congested;
+            lucas_fifo_push(&ctx->spp_fifo_buffer, &event.water.type, sizeof(event.water.type));
+            lucas_fifo_push(&ctx->spp_fifo_buffer, "\n", 1);
+            if (send_straight_away)
+                write_fifo_to_spp(&ctx->spp_fifo_buffer, g_shared_ctx.spp_handle);
+        } break;
         case LUCAS_EVENT_SPP_RECV:
             assert(event.recv.data && event.recv.len);
             ESP_LOG_BUFFER_HEX("cmd", event.recv.data, event.recv.len);
@@ -93,6 +102,12 @@ static void event_loop(void* octx) {
 
 void lucas_event_send(lucas_event_t* event) {
     assert(xQueueSend(s_event_queue, event, portMAX_DELAY) == pdPASS);
+}
+
+bool lucas_event_send_from_isr(lucas_event_t* event) {
+    BaseType_t higher_prio_task_awoken;
+    assert(xQueueSendFromISR(s_event_queue, event, &higher_prio_task_awoken) == pdPASS);
+    return higher_prio_task_awoken;
 }
 
 esp_err_t lucas_event_loop_init() {

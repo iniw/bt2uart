@@ -29,6 +29,8 @@ enum lucas_event_type_t {
 
     // clear the spp buffer
     LUCAS_EVENT_SPP_CLEAR_BUFFER,
+
+    LUCAS_EVENT_WATER,
 };
 
 typedef struct {
@@ -41,6 +43,10 @@ typedef struct {
         } recv, send;
 
         struct {
+            uint8_t type;
+        } water;
+
+        struct {
             size_t num_bytes_written;
             bool congested;
         } write_succeeded;
@@ -49,6 +55,6 @@ typedef struct {
 
 void lucas_event_send(lucas_event_t*);
 
-void lucas_event_send_from_isr(lucas_event_t*);
+bool lucas_event_send_from_isr(lucas_event_t*);
 
 esp_err_t lucas_event_loop_init();
