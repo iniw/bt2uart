@@ -43,7 +43,7 @@ typedef struct {
         } recv, send;
 
         struct {
-            uint8_t type;
+            lucas_water_event_type_t type;
         } water;
 
         struct {

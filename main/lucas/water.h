@@ -1,15 +1,18 @@
 #pragma once
 
 #include <esp_err.h>
-#include <lucas/event.h>
 #include <lucas/util/fifo.h>
 
 typedef enum {
     LUCAS_WATER_EVENT_PULSE = 0,
+    LUCAS_WATER_EVENT_MAX_PULSES_REACHED,
 } lucas_water_event_t;
 
+typedef uint8_t lucas_water_event_type_t;
+
 typedef enum {
-    LUCAS_WATER_CMD_ENABLE_RELAY = 0,
+    LUCAS_WATER_CMD_ENABLE_RELAY_TIMED = 0,
+    LUCAS_WATER_CMD_ENABLE_RELAY_PULSES,
 } lucas_water_cmd_type_t;
 
 typedef struct {
@@ -22,7 +25,7 @@ typedef struct {
     };
 } __attribute__((packed)) lucas_water_cmd_t;
 
-void lucas_water_send_cmd(lucas_water_event_t*, lucas_fifo_t*);
+void lucas_water_handle_event_send(lucas_water_event_type_t, lucas_fifo_t*);
 
 void lucas_water_interpret_cmd(void* data);
 

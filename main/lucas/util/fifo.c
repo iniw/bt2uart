@@ -25,6 +25,9 @@ void lucas_fifo_free(lucas_fifo_t* this) {
 }
 
 void lucas_fifo_push(lucas_fifo_t* this, void* data, size_t len) {
+    if (len == 0)
+        return;
+
     const size_t available_space = this->cap - this->len;
     if (len > available_space) {
         const size_t missing_space = len - available_space;
@@ -40,6 +43,9 @@ void lucas_fifo_push(lucas_fifo_t* this, void* data, size_t len) {
 }
 
 void lucas_fifo_pop(lucas_fifo_t* this, size_t num) {
+    if (num == 0)
+        return;
+
     assert(num <= this->len);
 
     if (num != this->len)

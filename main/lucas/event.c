@@ -50,8 +50,7 @@ static void event_loop(void* octx) {
             LOGI("water event [%hu]", event.water.type);
 
             bool send_straight_away = ctx->spp_fifo_buffer.len == 0 && !spp_congested;
-            lucas_fifo_push(&ctx->spp_fifo_buffer, &event.water.type, sizeof(event.water.type));
-            lucas_fifo_push(&ctx->spp_fifo_buffer, "\n", 1);
+            lucas_water_handle_event_send(event.water.type, &ctx->spp_fifo_buffer);
             if (send_straight_away)
                 write_fifo_to_spp(&ctx->spp_fifo_buffer, g_shared_ctx.spp_handle);
         } break;
@@ -122,7 +121,7 @@ esp_err_t lucas_event_loop_init() {
     if (s_event_queue == NULL)
         return ESP_ERR_NO_MEM;
 
-    RTOS_TRY(xTaskCreate(event_loop, "MAIN", 4096, &ctx, 16, NULL));
+    RTOS_TRY(xTaskCreatePinnedToCore(event_loop, "MAIN", 4096, &ctx, 20, NULL, 0));
 
     return ESP_OK;
 }

@@ -2,6 +2,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
+#include <freertos/semphr.h>
 #include <driver/gpio.h>
 #include <lucas/util/err.h>
 #include <lucas/util/log.h>
@@ -23,11 +24,11 @@ static esp_err_t enable_relay() {
 }
 
 static void relay_task(void* octx) {
-    uint32_t duration = *(uint32_t*)octx;
+    uint16_t duration = *(uint16_t*)octx;
 
     enable_relay();
 
-    LOGI("relay task sleeping for %lu seconds", duration);
+    LOGI("relay task sleeping for %hu seconds", duration);
     vTaskDelay(pdMS_TO_TICKS(duration * 1000));
     LOGI("sleep over");
 
@@ -36,18 +37,32 @@ static void relay_task(void* octx) {
     vTaskDelete(NULL);
 }
 
+static uint16_t g_max_pulse_count = 0;
+static uint16_t g_pulse_count = 0;
+
+static void consume_data_stream(void** stream, void* out, size_t len) {
+    memcpy(out, *stream, len);
+    *stream += len;
+}
+
 void lucas_water_interpret_cmd(void* data) {
-    lucas_water_cmd_type_t type = *(uint8_t*)data;
-    // only 1 byte for the discrimator even thhough the enum is 4 bytes
-    data += sizeof(uint8_t);
+    lucas_water_event_type_t type;
+    consume_data_stream(&data, &type, sizeof(lucas_water_event_type_t));
 
     LOGI("interpreting cmd - type = %d", type);
     switch (type) {
-    case LUCAS_WATER_CMD_ENABLE_RELAY: {
-        static uint32_t relay_task_duration = 0;
-        relay_task_duration = *(uint32_t*)data;
-        xTaskCreate(relay_task, "relay", 2048, &relay_task_duration, 5, NULL);
+    case LUCAS_WATER_CMD_ENABLE_RELAY_TIMED: {
+        static uint16_t relay_task_duration = 0;
+        consume_data_stream(&data, &relay_task_duration, sizeof(relay_task_duration));
+        xTaskCreate(relay_task, "relay", 2048, &relay_task_duration, 15, NULL);
     } break;
+    case LUCAS_WATER_CMD_ENABLE_RELAY_PULSES:
+        portDISABLE_INTERRUPTS();
+        enable_relay();
+        g_pulse_count = 0;
+        consume_data_stream(&data, &g_max_pulse_count, sizeof(g_max_pulse_count));
+        portENABLE_INTERRUPTS();
+        break;
     }
 }
 
@@ -57,8 +72,25 @@ static void pulse_counter_isr() {
         .water = { .type = LUCAS_WATER_EVENT_PULSE }
     };
 
+    if (g_max_pulse_count) {
+        g_pulse_count++;
+        if (g_pulse_count == g_max_pulse_count) {
+            g_pulse_count = g_max_pulse_count = 0;
+            // override the type
+            event.water.type = LUCAS_WATER_EVENT_MAX_PULSES_REACHED;
+        }
+    }
+
     if (lucas_event_send_from_isr(&event))
         portYIELD_FROM_ISR();
+}
+
+void lucas_water_handle_event_send(lucas_water_event_type_t event_discriminator, lucas_fifo_t* buffer) {
+    if (event_discriminator == LUCAS_WATER_EVENT_MAX_PULSES_REACHED)
+        disable_relay();
+
+    lucas_fifo_push(buffer, &event_discriminator, sizeof(lucas_water_event_type_t));
+    lucas_fifo_push(buffer, "\n", 1);
 }
 
 esp_err_t lucas_water_init() {
